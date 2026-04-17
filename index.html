@@ -125,9 +125,49 @@
       color: var(--accent);
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       display: flex; align-items: center; gap: 6px;
     }
+    .api-field { margin-bottom: 10px; }
+    .api-field label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    .api-field label a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .api-field label a:hover { text-decoration: underline; }
+    .provider-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .provider-row select {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      transition: border-color 0.2s;
+      cursor: pointer;
+    }
+    .provider-row select:focus { outline: none; border-color: var(--accent); }
+    .provider-row select option { background: var(--surface2); }
+    .cost-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+    }
+    .cost-badge.free { background: #3fb95022; border: 1px solid #3fb95055; color: var(--accent2); }
+    .cost-badge.low  { background: #d2992222; border: 1px solid #d2992255; color: var(--gold); }
+    .cost-badge.paid { background: #f8514922; border: 1px solid #f8514955; color: var(--danger); }
     .api-row {
       display: flex;
       gap: 8px;
@@ -482,7 +522,7 @@
     <span class="badge">FREE</span>
   </div>
   <div class="header-right">
-    <a href="https://console.groq.com" target="_blank" class="btn-ghost">
+    <a id="headerApiLink" href="https://console.groq.com" target="_blank" class="btn-ghost">
       🔑 Get Free API Key
     </a>
   </div>
@@ -494,14 +534,39 @@
 
     <!-- API KEY -->
     <div class="api-section">
-      <div class="api-section-title">🔑 Groq API Key</div>
-      <div class="api-row">
-        <input type="password" id="apiKey" placeholder="gsk_xxxxxxxxxxxxxxxxxxxx" />
-        <button class="api-save-btn" onclick="saveKey()">Save</button>
+      <div class="api-section-title">🔑 AI Provider</div>
+
+      <div class="api-field">
+        <label>Provider</label>
+        <div class="provider-row">
+          <select id="providerSelect" onchange="onProviderChange()">
+            <option value="groq">🚀 Groq</option>
+            <option value="openai">🤖 OpenAI</option>
+            <option value="deepseek">🐋 DeepSeek</option>
+            <option value="openrouter">🌐 OpenRouter</option>
+          </select>
+          <span id="costBadge" class="cost-badge free">Free</span>
+        </div>
       </div>
+
+      <div class="api-field">
+        <label>
+          API Key
+          <a id="apiKeyLink" href="https://console.groq.com" target="_blank">Get free API key →</a>
+        </label>
+        <div class="api-row">
+          <input type="password" id="apiKey" placeholder="Enter your API key..." />
+          <button class="api-save-btn" onclick="saveKey()">Save</button>
+        </div>
+      </div>
+
+      <div class="api-field">
+        <label>Model</label>
+        <input type="text" id="modelInput" value="llama-3.3-70b-versatile" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:0.85rem;font-family:monospace;" />
+      </div>
+
       <div class="api-notice">
         🔒 Stored locally in your browser — never sent to our servers.
-        &nbsp;<a href="https://console.groq.com" target="_blank">Get free key →</a>
       </div>
     </div>
 
@@ -585,7 +650,7 @@
 </div>
 
 <footer>
-  <p>WeeklyReport.ai — Powered by <a href="https://groq.com" target="_blank">Groq</a> × Llama 3.3 · Your API key never leaves your browser · Made with ❤️ for freelancers</p>
+  <p>WeeklyReport.ai — Supports Groq · OpenAI · DeepSeek · OpenRouter · Your API key never leaves your browser · Made with ❤️ for freelancers</p>
 </footer>
 
 <script>
@@ -593,16 +658,52 @@
   let selectedTone = 'professional';
   let lastMarkdown = '';
 
-  // Load saved API key
+  const PROVIDERS = {
+    groq:       { url: 'https://api.groq.com/openai/v1/chat/completions',        model: 'llama-3.3-70b-versatile',                  signupUrl: 'https://console.groq.com',        cost: 'free',  costLabel: 'Free' },
+    openai:     { url: 'https://api.openai.com/v1/chat/completions',              model: 'gpt-4o-mini',                              signupUrl: 'https://platform.openai.com',     cost: 'paid',  costLabel: 'Paid' },
+    deepseek:   { url: 'https://api.deepseek.com/v1/chat/completions',            model: 'deepseek-chat',                            signupUrl: 'https://platform.deepseek.com',   cost: 'low',   costLabel: 'Low cost' },
+    openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions',           model: 'meta-llama/llama-3.3-70b-instruct:free',   signupUrl: 'https://openrouter.ai',           cost: 'free',  costLabel: 'Free models' },
+  };
+
+  function onProviderChange() {
+    const provider = document.getElementById('providerSelect').value;
+    const p = PROVIDERS[provider];
+    // Load saved key for this provider
+    const saved = localStorage.getItem(`api_key_${provider}`) || '';
+    document.getElementById('apiKey').value = saved;
+    // Update model: use saved custom model or default
+    const savedModel = localStorage.getItem(`api_model_${provider}`) || p.model;
+    document.getElementById('modelInput').value = savedModel;
+    // Update signup link
+    const link = document.getElementById('apiKeyLink');
+    link.href = p.signupUrl;
+    link.textContent = `Get ${p.costLabel === 'Paid' ? '' : 'free '}API key →`;
+    // Update header link
+    const headerLink = document.getElementById('headerApiLink');
+    if (headerLink) { headerLink.href = p.signupUrl; }
+    // Update cost badge
+    const badge = document.getElementById('costBadge');
+    badge.className = `cost-badge ${p.cost}`;
+    badge.textContent = p.costLabel;
+    // Save selected provider
+    localStorage.setItem('selected_provider', provider);
+  }
+
+  // Load saved config
   window.addEventListener('DOMContentLoaded', () => {
-    const saved = localStorage.getItem('groq_api_key');
-    if (saved) document.getElementById('apiKey').value = saved;
+    const savedProvider = localStorage.getItem('selected_provider') || 'groq';
+    const select = document.getElementById('providerSelect');
+    select.value = savedProvider;
+    onProviderChange();
   });
 
   function saveKey() {
+    const provider = document.getElementById('providerSelect').value;
     const key = document.getElementById('apiKey').value.trim();
-    if (!key) { alert('Please enter your Groq API key.'); return; }
-    localStorage.setItem('groq_api_key', key);
+    const model = document.getElementById('modelInput').value.trim();
+    if (!key) { alert('Please enter your API key.'); return; }
+    localStorage.setItem(`api_key_${provider}`, key);
+    if (model) localStorage.setItem(`api_model_${provider}`, model);
     const btn = document.querySelector('.api-save-btn');
     btn.textContent = '✓ Saved!';
     btn.style.background = '#3fb950';
@@ -616,9 +717,12 @@
   }
 
   async function generateReport() {
-    const apiKey = localStorage.getItem('groq_api_key') || document.getElementById('apiKey').value.trim();
-    if (!apiKey) { alert('Please enter and save your Groq API key first.'); return; }
+    const provider = document.getElementById('providerSelect').value;
+    const p = PROVIDERS[provider];
+    const apiKey = localStorage.getItem(`api_key_${provider}`) || document.getElementById('apiKey').value.trim();
+    if (!apiKey) { alert('Please enter and save your API key first.'); return; }
 
+    const model = document.getElementById('modelInput').value.trim() || p.model;
     const projectName = document.getElementById('projectName').value.trim() || 'Project';
     const clientName = document.getElementById('clientName').value.trim() || 'Client';
     const workDone = document.getElementById('workDone').value.trim();
@@ -662,14 +766,14 @@ Generate a professional weekly client report in Markdown format with these secti
 Start with a brief greeting. Sign off professionally. Do not add any explanation outside the report itself.`;
 
     try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const res = await fetch(p.url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: model,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
           max_tokens: 1024
@@ -686,7 +790,7 @@ Start with a brief greeting. Sign off professionally. Do not add any explanation
       lastMarkdown = markdown;
       showReport(projectName, clientName, markdown);
     } catch (e) {
-      showError(e.message);
+      showError(e.message, p.signupUrl);
     } finally {
       btn.disabled = false;
       btn.innerHTML = '✨ Generate Report';
@@ -702,12 +806,13 @@ Start with a brief greeting. Sign off professionally. Do not add any explanation
       </div>`;
   }
 
-  function showError(msg) {
+  function showError(msg, signupUrl) {
+    signupUrl = signupUrl || 'https://console.groq.com';
     const panel = document.getElementById('rightPanel');
     panel.innerHTML = `
       <div class="error-box">
         ⚠️ <strong>Error:</strong> ${escHtml(msg)}<br/><br/>
-        Make sure your Groq API key is valid. <a href="https://console.groq.com" target="_blank" style="color:var(--accent)">Get a free key →</a>
+        Make sure your API key is valid. <a href="${escHtml(signupUrl)}" target="_blank" style="color:var(--accent)">Get an API key →</a>
       </div>`;
   }
 
